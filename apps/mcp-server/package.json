@@ -1,0 +1,27 @@
+{
+  "name": "@joboard/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "joboard-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx --env-file=.env src/index.ts",
+    "build": "tsup",
+    "start": "node --env-file=.env dist/index.js",
+    "seed": "tsx --env-file=.env src/seed.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@joboard/db": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^5.5.4"
+  }
+}
