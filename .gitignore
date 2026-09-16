@@ -10,3 +10,4 @@ build/
 npm-debug.log*
 .vercel/
 supabase/.temp/
+.vercel
