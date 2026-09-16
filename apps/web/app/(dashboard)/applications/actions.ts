@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/data';
-import { fetchJobPosting, guessSourceFromUrl } from '@/lib/job-scraper';
+import { fetchJobPosting, guessSourceFromUrl, normalizeJobUrl } from '@/lib/job-scraper';
 import type { ApplicationStatus, ApplicationUpdate, RemoteType } from '@joboard/db';
 
 function optionalString(formData: FormData, key: string): string | null {
@@ -36,6 +36,7 @@ export async function createApplicationFromUrl(formData: FormData) {
 
   const parsed: Awaited<ReturnType<typeof fetchJobPosting>> = await fetchJobPosting(url).catch((err: unknown) => ({
     source: guessSourceFromUrl(url),
+    resolvedUrl: normalizeJobUrl(url),
     error: err instanceof Error ? err.message : '抓取失败',
   }));
 
@@ -47,7 +48,7 @@ export async function createApplicationFromUrl(formData: FormData) {
     .insert({
       company,
       position,
-      job_url: url,
+      job_url: parsed.resolvedUrl,
       source: parsed.source,
       location: parsed.location,
       status,

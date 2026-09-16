@@ -33,6 +33,27 @@ export function guessSourceFromUrl(url: string): string {
   }
 }
 
+// LinkedIn's job-search UI links to `/jobs/search-results/?currentJobId=...`
+// (what you copy when clicking a job out of a results list) — that URL
+// requires a login session and bounces to /uas/login for a logged-out
+// fetch. The canonical `/jobs/view/<id>/` permalink for the same posting is
+// publicly fetchable, so rewrite to it before ever hitting the network.
+export function normalizeJobUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, '');
+    if (hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com')) {
+      const jobId = parsed.searchParams.get('currentJobId');
+      if (jobId && /^\d+$/.test(jobId)) {
+        return `https://www.linkedin.com/jobs/view/${jobId}/`;
+      }
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 const HTML_ENTITIES: Record<string, string> = {
   '&amp;': '&',
   '&quot;': '"',
@@ -54,6 +75,36 @@ function stripHtml(input: string): string {
 function extractTitleTag(html: string): string | undefined {
   const match = html.match(/<title[^>]*>([^<]*)<\/title>/i);
   return match ? decodeHtmlEntities(match[1]).trim() : undefined;
+}
+
+// A redirect to a login/signin page is the single most common failure mode
+// across job boards (LinkedIn especially) — the fetch still comes back 200,
+// so it looks like a successful scrape unless we explicitly check for it.
+function looksLikeAuthWall(finalUrl: string, title: string | undefined): boolean {
+  try {
+    if (/\/(login|signin|sign-in|authwall)(\/|$)/i.test(new URL(finalUrl).pathname)) return true;
+  } catch {
+    // ignore
+  }
+  return title ? /\b(log\s?in|sign\s?in)\b/i.test(title) : false;
+}
+
+// LinkedIn's public job page <title>/og:title doesn't embed JSON-LD, and the
+// text format itself isn't stable across requests — seen both
+// "<Company> hiring <Position> in <Location> | LinkedIn" and
+// "<Position> at <Company> — <Location> | LinkedIn Jobs". Try each.
+function parseLinkedInTitle(title: string): { company?: string; position?: string; location?: string } | null {
+  const hiringMatch = title.match(/^(.+?)\s+hiring\s+(.+?)\s+in\s+(.+?)\s*\|\s*LinkedIn(?:\s+Jobs)?\s*$/i);
+  if (hiringMatch) {
+    return { company: hiringMatch[1].trim(), position: hiringMatch[2].trim(), location: hiringMatch[3].trim() };
+  }
+
+  const atMatch = title.match(/^(.+?)\s+at\s+(.+?)\s*[—-]\s*(.+?)\s*\|\s*LinkedIn(?:\s+Jobs)?\s*$/i);
+  if (atMatch) {
+    return { position: atMatch[1].trim(), company: atMatch[2].trim(), location: atMatch[3].trim() };
+  }
+
+  return null;
 }
 
 // Many ATS pages don't set og:site_name, but their <title> often reads
@@ -148,20 +199,23 @@ export interface ScrapedJobPosting {
   location?: string;
   description?: string;
   source: string;
+  /** The URL actually fetched, after normalization (e.g. LinkedIn search-results -> /jobs/view/). */
+  resolvedUrl: string;
   error?: string;
 }
 
-export async function fetchJobPosting(url: string): Promise<ScrapedJobPosting> {
+export async function fetchJobPosting(rawUrl: string): Promise<ScrapedJobPosting> {
+  const url = normalizeJobUrl(rawUrl);
   const source = guessSourceFromUrl(url);
 
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
   } catch {
-    return { source, error: '不是一个有效的 URL' };
+    return { source, resolvedUrl: url, error: '不是一个有效的 URL' };
   }
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    return { source, error: '只支持 http(s) 链接' };
+    return { source, resolvedUrl: url, error: '只支持 http(s) 链接' };
   }
 
   try {
@@ -176,18 +230,29 @@ export async function fetchJobPosting(url: string): Promise<ScrapedJobPosting> {
     });
 
     if (!response.ok) {
-      return { source, error: `抓取失败（HTTP ${response.status}）` };
+      return { source, resolvedUrl: url, error: `抓取失败（HTTP ${response.status}）` };
     }
 
     const html = await response.text();
+    const titleTag = extractTitleTag(html);
+
+    if (looksLikeAuthWall(response.url, titleTag)) {
+      return { source, resolvedUrl: url, error: '这个链接需要登录才能查看，抓取被拦截（返回了登录页）' };
+    }
+
     const jobPosting = extractJobPostingJsonLd(html);
     const meta = extractMetaTags(html);
+    const ogTitle = meta.get('og:title');
 
-    const title = jobPosting?.title?.trim() || meta.get('og:title') || extractTitleTag(html);
+    const linkedInParsed =
+      source === 'LinkedIn' ? (parseLinkedInTitle(ogTitle ?? '') ?? parseLinkedInTitle(titleTag ?? '')) : null;
+
+    const title = jobPosting?.title?.trim() || linkedInParsed?.position || ogTitle || titleTag;
 
     const orgRaw = jobPosting?.hiringOrganization;
     const company =
       (typeof orgRaw === 'string' ? orgRaw : orgRaw?.name)?.trim() ||
+      linkedInParsed?.company ||
       meta.get('og:site_name') ||
       guessCompanyFromTitleOrLogo(html);
 
@@ -199,13 +264,16 @@ export async function fetchJobPosting(url: string): Promise<ScrapedJobPosting> {
     const ogDescription = meta.get('og:description');
     const isLongEnoughForDescription = Boolean(ogDescription && ogDescription.length >= 80);
 
-    const location = formatLocation(jobPosting?.jobLocation) ?? (!isLongEnoughForDescription ? ogDescription : undefined);
+    const location =
+      formatLocation(jobPosting?.jobLocation) ??
+      linkedInParsed?.location ??
+      (!isLongEnoughForDescription ? ogDescription : undefined);
 
     const rawDescription = jobPosting?.description || (isLongEnoughForDescription ? ogDescription : undefined);
     const description = rawDescription ? stripHtml(rawDescription).slice(0, 800) : undefined;
 
-    return { title, company, location, description, source };
+    return { title, company, location, description, source, resolvedUrl: url };
   } catch (err) {
-    return { source, error: err instanceof Error ? err.message : '抓取失败' };
+    return { source, resolvedUrl: url, error: err instanceof Error ? err.message : '抓取失败' };
   }
 }
