@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "@joboard/db": "*",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "zod": "^4.6.5"
+    "@joboard/mcp-tools": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",

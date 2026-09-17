@@ -120,6 +120,9 @@ export type JobPostingRow = {
   status: JobPostingStatus;
   application_id: string | null;
   discovered_at: string;
+  tailored_resume: ResumeDocument | null;
+  tailored_match_score: number | null;
+  resume_tailored_at: string | null;
 };
 
 export type JobPostingInsert = {
@@ -132,6 +135,9 @@ export type JobPostingInsert = {
   match_score?: number | null;
   status?: JobPostingStatus;
   application_id?: string | null;
+  tailored_resume?: ResumeDocument | null;
+  tailored_match_score?: number | null;
+  resume_tailored_at?: string | null;
 };
 
 export type JobPostingUpdate = {
@@ -144,6 +150,9 @@ export type JobPostingUpdate = {
   match_score?: number | null;
   status?: JobPostingStatus;
   application_id?: string | null;
+  tailored_resume?: ResumeDocument | null;
+  tailored_match_score?: number | null;
+  resume_tailored_at?: string | null;
 };
 
 export type TechTrendSignalRow = {
@@ -201,6 +210,18 @@ export type AgentRunUpdate = {
   finished_at?: string | null;
 };
 
+// Structured resume shape, shared by the canonical resume (profile_resume)
+// and per-posting tailored variants (job_postings.tailored_resume). Rendered
+// by the shared resume template component into the print-styled page.
+export type ResumeDocument = {
+  name: string;
+  contact: { label: string; value: string; href?: string }[];
+  skills: { category: string; items: string[] }[];
+  experience: { role: string; company: string; dates: string; bullets: string[] }[];
+  projects: { title: string; link?: string; description: string }[];
+  education: { dates: string; institution: string; detail: string }[];
+};
+
 export type ProfileSkillRow = {
   id: string;
   skill_name: string;
@@ -216,6 +237,26 @@ export type ProfileSkillUpsert = {
 export type ProfileSkillUpdate = {
   skill_name?: string;
   proficiency?: number | null;
+};
+
+export type ProfileResumeRow = {
+  id: string;
+  source_filename: string | null;
+  full_text: string;
+  structured: ResumeDocument | null;
+  updated_at: string;
+};
+
+export type ProfileResumeInsert = {
+  source_filename?: string | null;
+  full_text: string;
+  structured?: ResumeDocument | null;
+};
+
+export type ProfileResumeUpdate = {
+  source_filename?: string | null;
+  full_text?: string;
+  structured?: ResumeDocument | null;
 };
 
 export type Database = {
@@ -255,6 +296,12 @@ export type Database = {
         Row: ProfileSkillRow;
         Insert: ProfileSkillUpsert;
         Update: ProfileSkillUpdate;
+        Relationships: [];
+      };
+      profile_resume: {
+        Row: ProfileResumeRow;
+        Insert: ProfileResumeInsert;
+        Update: ProfileResumeUpdate;
         Relationships: [];
       };
     };

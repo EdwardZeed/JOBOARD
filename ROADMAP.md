@@ -32,6 +32,21 @@ schedule it.
 - `/agent` 页面现在只是简单地展示 `agent_runs` 列表，等真的有定时任务后，可能需要加：按 stage/
   status 筛选、失败重试、下一次预计运行时间这些。
 
+**2026-09-17 讨论结论（还没动手实现，先记下来）：**
+
+- 定时器倾向用 **Claude Code 的云端定时 agent**（`schedule` 技能 / CronCreate 建的 routine），不用本地
+  cron/launchd——好处是不依赖笔记本开机，坏处是云端 agent 连不到本地 stdio 的 `apps/mcp-server`。
+- 因此需要把 MCP server 改造成网络可达：**加进 `apps/web` 而不是单独起服务**——用
+  [`mcp-handler`](https://github.com/vercel/mcp-handler) 在 `apps/web` 里加一个 `app/api/mcp/route.ts`
+  （Streamable HTTP transport），把 `apps/mcp-server/src/index.ts` 的 9 个工具逻辑搬过去，复用同一个
+  `@joboard/db` service client。边际成本是 $0，因为 `apps/web` 已经部署在 Vercel 了，不用新买/新管一套
+  部署。本地的 `apps/mcp-server`（stdio）保留，继续给本地 Claude Code 手动调试用。
+- **这个 HTTP 端点必须加鉴权**（比如 `MCP_AUTH_TOKEN` bearer token），而且这件事跟"给 dashboard 加登录
+  模块"是两回事、不能互相替代：登录模块保护的是浏览器 session，云端 agent 是程序对程序调用，走不到登录
+  流程。哪怕以后 dashboard 加了登录，`/api/mcp` 这个 route 还是要单独校验 token。
+- 自动投递（apply 阶段）不做成全自动：match_score ≥ 阈值的职位先转成"待确认"状态，实际提交动作留给人工
+  在 dashboard 上确认，避免 AI 判断失误但已经不可逆地投出去。
+
 ## 域名（2026-09-16 调研）
 
 现有 `Joboard` 这个名字最大的风险：**jobboard.io（双 b）已经被 ZipRecruiter 收购在用**，是一个

@@ -3,6 +3,27 @@ import type { ApplicationStatus } from '@joboard/db';
 
 const db = createServiceClient();
 
+export async function getCurrentResume() {
+  const { data, error } = await db
+    .from('profile_resume')
+    .select('*')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function getTailoredResume(postingId: string) {
+  const { data, error } = await db
+    .from('job_postings')
+    .select('title, company, tailored_resume, tailored_match_score')
+    .eq('id', postingId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function listApplications(status?: ApplicationStatus) {
   let query = db.from('applications').select('*').order('created_at', { ascending: false });
   if (status) query = query.eq('status', status);
