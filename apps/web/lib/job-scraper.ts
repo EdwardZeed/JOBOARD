@@ -8,6 +8,7 @@
 const KNOWN_SOURCES: Record<string, string> = {
   'linkedin.com': 'LinkedIn',
   'seek.com.au': 'SEEK',
+  'seek.com': 'SEEK',
   'indeed.com': 'Indeed',
   'glassdoor.com': 'Glassdoor',
   'greenhouse.io': 'Greenhouse',
@@ -20,6 +21,10 @@ const KNOWN_SOURCES: Record<string, string> = {
   'smartrecruiters.com': 'SmartRecruiters',
   'bamboohr.com': 'BambooHR',
 };
+
+// Multi-tenant job boards with their own prominent branding — their
+// og:site_name / logo alt text names the platform, never the employer.
+const AGGREGATOR_SOURCES = new Set(['LinkedIn', 'SEEK', 'Indeed', 'Glassdoor']);
 
 export function guessSourceFromUrl(url: string): string {
   try {
@@ -36,18 +41,29 @@ export function guessSourceFromUrl(url: string): string {
 // LinkedIn's job-search UI links to `/jobs/search-results/?currentJobId=...`
 // (what you copy when clicking a job out of a results list) — that URL
 // requires a login session and bounces to /uas/login for a logged-out
-// fetch. The canonical `/jobs/view/<id>/` permalink for the same posting is
-// publicly fetchable, so rewrite to it before ever hitting the network.
+// fetch. SEEK's search results pages similarly carry the specific job only
+// as a `?jobId=` query param, with none of that job's data in the static
+// HTML (it's client-rendered). Both have a public canonical permalink that
+// IS statically fetchable, so rewrite to it before ever hitting the network.
 export function normalizeJobUrl(url: string): string {
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname.replace(/^www\./, '');
+
     if (hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com')) {
       const jobId = parsed.searchParams.get('currentJobId');
       if (jobId && /^\d+$/.test(jobId)) {
         return `https://www.linkedin.com/jobs/view/${jobId}/`;
       }
     }
+
+    if (hostname === 'seek.com.au' || hostname.endsWith('.seek.com.au') || hostname === 'seek.com' || hostname.endsWith('.seek.com')) {
+      const jobId = parsed.searchParams.get('jobId');
+      if (jobId && /^\d+$/.test(jobId) && !/^\/job\//.test(parsed.pathname)) {
+        return `${parsed.protocol}//${parsed.hostname}/job/${jobId}`;
+      }
+    }
+
     return url;
   } catch {
     return url;
@@ -105,6 +121,23 @@ function parseLinkedInTitle(title: string): { company?: string; position?: strin
   }
 
   return null;
+}
+
+// SEEK's job page <title>/og:title reads "<Position> Job in <Location> - SEEK"
+// — no company in it (see guessCompanyFromAriaLabel for where that comes from).
+function parseSeekTitle(title: string): { position?: string; location?: string } | null {
+  const match = title.match(/^(.+?)\s+Job\s+in\s+(.+?)\s*-\s*SEEK\s*$/i);
+  if (!match) return null;
+  return { position: match[1].trim(), location: match[2].trim() };
+}
+
+// SEEK (and other sites using the same accessibility convention) render an
+// "Apply for <position> at <company>" aria-label on the apply button. Unlike
+// og:site_name/logo alt, this names the specific listing's employer even on
+// a multi-tenant aggregator, so it's safe to trust regardless of source.
+function guessCompanyFromAriaLabel(html: string): string | undefined {
+  const match = html.match(/aria-label=["']Apply for .+? at ([^"']+?)["']/i);
+  return match ? decodeHtmlEntities(match[1]).trim() : undefined;
 }
 
 // Many ATS pages don't set og:site_name, but their <title> often reads
@@ -246,15 +279,26 @@ export async function fetchJobPosting(rawUrl: string): Promise<ScrapedJobPosting
 
     const linkedInParsed =
       source === 'LinkedIn' ? (parseLinkedInTitle(ogTitle ?? '') ?? parseLinkedInTitle(titleTag ?? '')) : null;
+    const seekParsed = source === 'SEEK' ? (parseSeekTitle(ogTitle ?? '') ?? parseSeekTitle(titleTag ?? '')) : null;
 
-    const title = jobPosting?.title?.trim() || linkedInParsed?.position || ogTitle || titleTag;
+    const title = jobPosting?.title?.trim() || linkedInParsed?.position || seekParsed?.position || ogTitle || titleTag;
+
+    // og:site_name and a page's "logo" alt text are reliable company signals
+    // on single-tenant ATS pages (Greenhouse, Lever, Ashby...) but actively
+    // wrong on multi-tenant aggregators (SEEK, Indeed, Glassdoor, and
+    // LinkedIn when its own title parser doesn't match) — those sites' own
+    // branding logo/site-name is what gets picked up, not the employer's.
+    // Better to leave company blank (a visible "fill this in" placeholder)
+    // than to silently store the job board's own name as the company.
+    const isAggregator = AGGREGATOR_SOURCES.has(source);
 
     const orgRaw = jobPosting?.hiringOrganization;
     const company =
       (typeof orgRaw === 'string' ? orgRaw : orgRaw?.name)?.trim() ||
       linkedInParsed?.company ||
-      meta.get('og:site_name') ||
-      guessCompanyFromTitleOrLogo(html);
+      guessCompanyFromAriaLabel(html) ||
+      (isAggregator ? undefined : meta.get('og:site_name')) ||
+      (isAggregator ? undefined : guessCompanyFromTitleOrLogo(html));
 
     // og:description is unreliable off ATS pages — some (Greenhouse) put the
     // office location there instead of a real description. A real job
@@ -267,6 +311,7 @@ export async function fetchJobPosting(rawUrl: string): Promise<ScrapedJobPosting
     const location =
       formatLocation(jobPosting?.jobLocation) ??
       linkedInParsed?.location ??
+      seekParsed?.location ??
       (!isLongEnoughForDescription ? ogDescription : undefined);
 
     const rawDescription = jobPosting?.description || (isLongEnoughForDescription ? ogDescription : undefined);
