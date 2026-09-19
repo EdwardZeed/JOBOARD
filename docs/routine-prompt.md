@@ -1,7 +1,8 @@
-# Joboard 求职 Routine — 运行说明
+# Joboard 求职 Agent — 运行说明
 
-这是 Claude Code 云端定时 agent(Routine)每次运行时应该遵循的完整指令。创建 Routine 时把下面
-"## Prompt" 这一节的内容整段作为它的 prompt/instructions;其余部分是给人看的背景说明,不用喂给它。
+这是 `apps/agent-worker`(自托管在 Railway、用 Claude Agent SDK 跑)每次运行时应该遵循的完整指令。
+`apps/agent-worker/src/prompt.ts` 会在启动时自动从下面"## Prompt"这一节提取整段内容作为 `query()`
+的 prompt;其余部分是给人看的背景说明,不会喂给它。
 
 ## 背景
 
@@ -17,7 +18,11 @@
 
 ```
 你是 Joboard 的求职 agent,每次运行执行一轮完整的 think → search → match → tailor → report。
-所有数据读写都通过名为 joboard 的 MCP server 完成,不要直接访问 Supabase 或猜测 URL。
+所有数据读写都通过名为 joboard 的 MCP server 完成(工具名形如 `mcp__joboard__get_profile_resume`
+这种,已经作为原生工具连接好了,直接调用,不要直接访问 Supabase 或猜测 URL)。下面每一步提到
+"调 xxx 工具" 都是指调用对应的 `mcp__joboard__xxx` 工具,参数字段见
+[packages/mcp-tools/src/index.ts](../packages/mcp-tools/src/index.ts) 里对应 `registerTool` 的
+`inputSchema`。
 
 ## 1. think
 1. 调 get_profile_resume 拿到当前简历全文(full_text)。
@@ -78,11 +83,19 @@ ATS——请求前先确认端点真的返回数据,404/空结果就跳过,不�
 - 遇到工具调用报错(比如某个 ATS 端点挂了),记录下来继续跑完剩下的部分,不要让整轮失败。
 ```
 
-## 待补充(创建 Routine 时需要一并确认)
+## 落地状态(2026-09-20)
 
-- Routine 需要连接到 `https://<部署域名>/api/mcp`,并配置 `Authorization: Bearer <MCP_AUTH_TOKEN>`
-  header——这个值和 `apps/web` 部署环境里的 `MCP_AUTH_TOKEN` 必须一致。
-- 触发频率:每天固定时间一次(推荐,已在 PRD 里确认),具体时间点待定。
-- ATS 公司样例名单是我按"知名科技公司里常见用 Greenhouse/Lever 的"这个印象挑的起始样例,不保证
-  100% 准确(公司可能换过 ATS 平台),prompt 里已经写了"先探测端点再用,404 就跳过"这条兜底逻辑,
-  跑起来之后可以根据实际命中率替换成你真正想覆盖的目标公司名单。
+- **部署路径已经从 Claude Code 云端 Routine 换成自托管**：Routine（`trig_01B9dBUfxpGoLuQkhZb9a7Ui`）
+  2026-09-19 那次运行被云端沙箱的出站网络策略拦在门外（`web-pink-two-30.vercel.app` 被 403 拒绝），
+  排查发现 Routine 的沙箱环境默认不让访问任意外部域名。改用 [apps/agent-worker](../apps/agent-worker)——
+  用 Claude Agent SDK 的 `query()`，自己托管在 Railway 上，网络策略自己说了算，不再有这层限制。
+- **MCP 连接方式也因此变简单了**：Agent SDK 的 `mcpServers` 选项原生支持 `{type: "http", url, headers}`，
+  不需要 claude.ai 的 `connector_uuid` 注册机制，`headers` 里直接带 `Authorization: Bearer` 就行——不再
+  需要之前 Routine 上那套 Bash + curl 拼 JSON-RPC 的手动方案，工具调用现在是原生的。
+- 生产 MCP 端点:`https://web-pink-two-30.vercel.app/api/mcp`，已验证 401/200 行为正常，`tools/list`
+  返回全部 13 个工具。
+- 触发方式：Railway 的 Cron Job 服务类型，每天 Perth 时间早上 8:00（`0 0 * * *` UTC）跑一次
+  `node dist/index.js`，跑完退出，不常驻。
+- ATS 公司样例名单是按"知名科技公司里常见用 Greenhouse/Lever 的"这个印象挑的起始样例，不保证
+  100% 准确（公司可能换过 ATS 平台），prompt 里已经写了"先探测端点再用，404 就跳过"这条兜底逻辑，
+  跑起来之后可以根据实际命中率替换成真正想覆盖的目标公司名单。
