@@ -14,7 +14,6 @@ RUN npm run build --workspace=apps/agent-worker
 FROM node:20-slim
 WORKDIR /repo
 COPY --from=build /repo/node_modules node_modules
-COPY --from=build /repo/apps/agent-worker/node_modules apps/agent-worker/node_modules
 COPY --from=build /repo/apps/agent-worker/dist apps/agent-worker/dist
 COPY --from=build /repo/apps/agent-worker/package.json apps/agent-worker/package.json
 COPY --from=build /repo/docs/routine-prompt.md docs/routine-prompt.md
