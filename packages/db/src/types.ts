@@ -239,11 +239,56 @@ export type ProfileSkillUpdate = {
   proficiency?: number | null;
 };
 
+export type SearchKeywords = {
+  version: number;
+  keywords: string[];
+};
+
+export type SearchPreferencesRow = {
+  id: true;
+  location_tiers: string[][];
+  posted_within_days: number;
+  country: string;
+  site_domains: string[];
+  updated_at: string;
+};
+
+export type SearchPreferencesUpdate = {
+  location_tiers?: string[][];
+  posted_within_days?: number;
+  country?: string;
+  site_domains?: string[];
+  updated_at?: string;
+};
+
+export type ApplicantProfileRow = {
+  id: true;
+  facts: Record<string, unknown>;
+  confirmed_fields: string[];
+  resume_id: string | null;
+  resume_file_path: string | null;
+  resume_file_sha256: string | null;
+  resume_file_confirmed_at: string | null;
+  updated_at: string;
+};
+
+export type ApplicantProfileUpdate = {
+  facts?: Record<string, unknown>;
+  confirmed_fields?: string[];
+  resume_id?: string | null;
+  resume_file_path?: string | null;
+  resume_file_sha256?: string | null;
+  resume_file_confirmed_at?: string | null;
+  updated_at?: string;
+};
+
 export type ProfileResumeRow = {
   id: string;
   source_filename: string | null;
   full_text: string;
   structured: ResumeDocument | null;
+  search_keywords: SearchKeywords | null;
+  search_keywords_at: string | null;
   updated_at: string;
 };
 
@@ -257,6 +302,8 @@ export type ProfileResumeUpdate = {
   source_filename?: string | null;
   full_text?: string;
   structured?: ResumeDocument | null;
+  search_keywords?: SearchKeywords | null;
+  search_keywords_at?: string | null;
 };
 
 export type Database = {
@@ -302,6 +349,18 @@ export type Database = {
         Row: ProfileResumeRow;
         Insert: ProfileResumeInsert;
         Update: ProfileResumeUpdate;
+        Relationships: [];
+      };
+      search_preferences: {
+        Row: SearchPreferencesRow;
+        Insert: SearchPreferencesUpdate;
+        Update: SearchPreferencesUpdate;
+        Relationships: [];
+      };
+      applicant_profile: {
+        Row: ApplicantProfileRow;
+        Insert: ApplicantProfileUpdate;
+        Update: ApplicantProfileUpdate;
         Relationships: [];
       };
     };

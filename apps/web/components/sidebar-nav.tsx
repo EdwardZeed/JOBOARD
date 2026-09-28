@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: '/discovery', label: '发现职位' },
   { href: '/trends', label: '技术趋势' },
   { href: '/agent', label: 'Agent 日志' },
+  { href: '/settings', label: '设置' },
 ];
 
 export function SidebarNav() {

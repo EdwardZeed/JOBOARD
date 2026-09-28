@@ -79,4 +79,16 @@ export async function listAgentRuns() {
   return data;
 }
 
+export async function getSearchPreferences() {
+  const { data, error } = await db.from('search_preferences').select('*').eq('id', true).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getApplicantProfile() {
+  const { data, error } = await db.from('applicant_profile').select('*').eq('id', true).single();
+  if (error) throw error;
+  return data;
+}
+
 export { db };
