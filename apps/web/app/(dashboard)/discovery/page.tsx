@@ -30,8 +30,8 @@ export default async function DiscoveryPage() {
         ) : (
           openPostings.map((posting) => (
             <Card key={posting.id}>
-              <CardContent className="flex items-start justify-between gap-4 py-4">
-                <div className="space-y-1">
+              <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div className="min-w-0 space-y-1">
                   <div className="font-medium">
                     {posting.title} · {posting.company}
                   </div>
@@ -80,8 +80,11 @@ export default async function DiscoveryPage() {
           <h2 className="mb-2 text-sm font-medium text-muted-foreground">已处理</h2>
           <div className="space-y-2">
             {closedPostings.map((posting) => (
-              <div key={posting.id} className="flex items-center justify-between rounded-md border px-4 py-2 text-sm">
-                <span>
+              <div
+                key={posting.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-4 py-2 text-sm"
+              >
+                <span className="min-w-0">
                   {posting.title} · {posting.company}
                 </span>
                 <Badge variant="outline">{JOB_POSTING_STATUS_LABELS[posting.status]}</Badge>

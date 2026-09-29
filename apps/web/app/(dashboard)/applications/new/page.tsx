@@ -45,7 +45,7 @@ export default async function NewApplicationPage({
               required
               autoFocus
             />
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button type="submit" name="status" value="applied">
                 我已经投递了，记一下
               </Button>
@@ -83,7 +83,7 @@ export default async function NewApplicationPage({
         </summary>
         <div className="border-t px-4 py-4">
           <form action={createApplication} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="company">公司 *</Label>
                 <Input id="company" name="company" required />
@@ -94,7 +94,7 @@ export default async function NewApplicationPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="status">状态</Label>
                 <select
@@ -128,7 +128,7 @@ export default async function NewApplicationPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="location">地点</Label>
                 <Input id="location" name="location" />

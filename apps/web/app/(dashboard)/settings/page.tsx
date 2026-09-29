@@ -41,7 +41,7 @@ export default async function SettingsPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="posted_within_days">只看多少天内发布的职位</Label>
                 <Input
@@ -91,32 +91,37 @@ export default async function SettingsPage() {
             {facts.length === 0 ? (
               <p className="text-sm text-muted-foreground">还没有任何字段，在下面添加一个</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3 sm:space-y-2">
                 {facts.map(([key, value]) => (
-                  <div key={key} className="flex items-start gap-2">
-                    <div className="w-36 shrink-0 pt-2 text-sm font-medium">{key}</div>
+                  <div
+                    key={key}
+                    className="flex flex-col gap-1.5 border-b pb-3 last:border-b-0 last:pb-0 sm:flex-row sm:items-start sm:gap-2 sm:border-b-0 sm:pb-0"
+                  >
+                    <div className="text-sm font-medium sm:w-36 sm:shrink-0 sm:pt-2">{key}</div>
                     <Input name={`value__${key}`} defaultValue={String(value ?? '')} className="flex-1" />
-                    <label className="flex items-center gap-1.5 pt-2 text-xs whitespace-nowrap text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        name={`confirmed__${key}`}
-                        defaultChecked={profile.confirmed_fields.includes(key)}
-                      />
-                      已确认
-                    </label>
-                    <label className="flex items-center gap-1.5 pt-2 text-xs whitespace-nowrap text-destructive">
-                      <input type="checkbox" name={`delete__${key}`} />
-                      删除
-                    </label>
+                    <div className="flex gap-3 sm:contents">
+                      <label className="flex items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground sm:pt-2">
+                        <input
+                          type="checkbox"
+                          name={`confirmed__${key}`}
+                          defaultChecked={profile.confirmed_fields.includes(key)}
+                        />
+                        已确认
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs whitespace-nowrap text-destructive sm:pt-2">
+                        <input type="checkbox" name={`delete__${key}`} />
+                        删除
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="flex items-start gap-2 border-t pt-3">
-              <Input name="new_key" placeholder="新字段名，例如 linkedin_url" className="w-36 shrink-0" />
+            <div className="flex flex-col gap-1.5 border-t pt-3 sm:flex-row sm:items-start sm:gap-2">
+              <Input name="new_key" placeholder="新字段名，例如 linkedin_url" className="sm:w-36 sm:shrink-0" />
               <Input name="new_value" placeholder="值" className="flex-1" />
-              <label className="flex items-center gap-1.5 pt-2 text-xs whitespace-nowrap text-muted-foreground">
+              <label className="flex items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground sm:pt-2">
                 <input type="checkbox" name="new_confirmed" />
                 已确认
               </label>

@@ -55,7 +55,7 @@ export default async function ApplicationDetailPage({
             <CardContent>
               <form action={updateApplicationDetails} className="space-y-4">
                 <input type="hidden" name="id" value={application.id} />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="company">公司</Label>
                     <Input id="company" name="company" defaultValue={application.company} />
@@ -65,7 +65,7 @@ export default async function ApplicationDetailPage({
                     <Input id="position" name="position" defaultValue={application.position} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="location">地点</Label>
                     <Input id="location" name="location" defaultValue={application.location ?? ''} />
@@ -87,7 +87,7 @@ export default async function ApplicationDetailPage({
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="salary_min">薪资下限</Label>
                     <Input id="salary_min" name="salary_min" type="number" defaultValue={application.salary_min ?? ''} />
@@ -97,7 +97,7 @@ export default async function ApplicationDetailPage({
                     <Input id="salary_max" name="salary_max" type="number" defaultValue={application.salary_max ?? ''} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="source">来源</Label>
                     <Input id="source" name="source" defaultValue={application.source ?? ''} />
