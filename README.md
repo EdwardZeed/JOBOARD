@@ -1,7 +1,10 @@
 # Joboard
 
-找工作进度看板。数据存 Supabase，Dashboard 用 Next.js 写，部署到 Vercel。给未来的 agentic
-loop 留了一个 MCP server 作为写入接口——loop 本身不在这个仓库里，需要你自己接下来搭。
+找工作进度看板。数据存 Supabase，Dashboard 用 Next.js 写，部署到 Vercel。
+
+这个仓库只负责看板本身。每天自动找工作、判断匹配、代投申请的 agent 在另一个仓库
+[joboard-agent](https://github.com/EdwardZeed/joboard-agent)。它通过 `apps/web` 里的 MCP 接口
+`/api/mcp` 读写这里的数据，请求需要带 `MCP_AUTH_TOKEN` 作为 Bearer token。
 
 ## 目录结构
 

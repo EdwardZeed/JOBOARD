@@ -273,6 +273,7 @@ export type ApplicantProfileRow = {
 };
 
 export type ApplicantProfileUpdate = {
+  id?: true; // single-row table; needed when upserting
   facts?: Record<string, unknown>;
   confirmed_fields?: string[];
   resume_id?: string | null;

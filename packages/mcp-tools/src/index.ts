@@ -209,6 +209,34 @@ export function createMcpServer(db: JoboardClient): McpServer {
   );
 
   server.registerTool(
+    'update_job_posting',
+    {
+      title: 'Update a job posting',
+      description:
+        'Update match_score and/or status on an already-logged job_postings row (match stage, after scoring). ' +
+        'Use this to promote a posting to status="matched" once it clears the apply threshold — ' +
+        'convert_posting_to_application is a separate, human-triggered step for actually tracking it as an application.',
+      inputSchema: {
+        posting_id: z.string().uuid(),
+        match_score: z.number().min(0).max(100).optional(),
+        status: z.enum(JOB_POSTING_STATUSES).optional(),
+      },
+    },
+    async ({ posting_id, match_score, status }) => {
+      if (match_score === undefined && status === undefined) {
+        return errorResult('Provide at least one of match_score or status to update.');
+      }
+      const patch: { match_score?: number; status?: (typeof JOB_POSTING_STATUSES)[number] } = {};
+      if (match_score !== undefined) patch.match_score = match_score;
+      if (status !== undefined) patch.status = status;
+
+      const { data, error } = await db.from('job_postings').update(patch).eq('id', posting_id).select('*').single();
+      if (error) return errorResult(error.message);
+      return jsonResult(data);
+    }
+  );
+
+  server.registerTool(
     'convert_posting_to_application',
     {
       title: 'Convert a discovered posting into a tracked application',
@@ -357,6 +385,165 @@ export function createMcpServer(db: JoboardClient): McpServer {
         .maybeSingle();
       if (error) return errorResult(error.message);
       if (!data) return errorResult('No resume on file yet — call update_profile_resume first.');
+      return jsonResult(data);
+    }
+  );
+
+  server.registerTool(
+    'get_search_keywords',
+    {
+      title: 'Get the cached search keywords for the current resume',
+      description:
+        'Returns the most recent resume\'s id and the search keywords cached on it (null when none were generated yet ' +
+        'for this resume version), without the resume text. The discover workflow calls this first so it only re-reads ' +
+        'the resume and regenerates keywords when the cache is empty or stale.',
+      inputSchema: {},
+    },
+    async () => {
+      const { data, error } = await db
+        .from('profile_resume')
+        .select('id, search_keywords, search_keywords_at')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return errorResult(error.message);
+      if (!data) return errorResult('No resume on file yet — call update_profile_resume first.');
+      return jsonResult({
+        resume_id: data.id,
+        keywords: data.search_keywords,
+        generated_at: data.search_keywords_at,
+      });
+    }
+  );
+
+  server.registerTool(
+    'save_search_keywords',
+    {
+      title: 'Cache search keywords on a resume version',
+      description:
+        'Store the structured search keywords generated from a resume on that resume row, so later runs can reuse them.',
+      inputSchema: {
+        resume_id: z.string().uuid(),
+        keywords: z.object({
+          version: z.number().int(),
+          keywords: z.array(z.string().min(1)).min(1),
+        }),
+      },
+    },
+    async ({ resume_id, keywords }) => {
+      const { data, error } = await db
+        .from('profile_resume')
+        .update({ search_keywords: keywords, search_keywords_at: new Date().toISOString() })
+        .eq('id', resume_id)
+        .select('id, search_keywords, search_keywords_at')
+        .single();
+      if (error) return errorResult(error.message);
+      return jsonResult(data);
+    }
+  );
+
+  server.registerTool(
+    'get_search_preferences',
+    {
+      title: 'Get the job-search preferences',
+      description:
+        'Returns where to search (location_tiers: ordered tiers of place terms, earlier tiers preferred; country: the ' +
+        'country the search engine biases towards; site_domains: job boards searched directly) and how recent a ' +
+        'posting must be (posted_within_days). The discover workflow reads this on every run.',
+      inputSchema: {},
+    },
+    async () => {
+      const { data, error } = await db.from('search_preferences').select('*').maybeSingle();
+      if (error) return errorResult(error.message);
+      if (!data) return errorResult('No search_preferences row — the 0007 migration seeds one.');
+      return jsonResult(data);
+    }
+  );
+
+  server.registerTool(
+    'get_applicant_profile',
+    {
+      title: 'Get the applicant profile',
+      description:
+        'Returns facts about the user (work rights, availability, salary expectations, preferences) and ' +
+        'confirmed_fields, the list of fact keys the user has explicitly confirmed. Only confirmed fields are ' +
+        'reliable; anything else is a draft, and an unknown must not be treated as false. Read-only.',
+      inputSchema: {},
+    },
+    async () => {
+      const { data, error } = await db
+        .from('applicant_profile')
+        .select('facts, confirmed_fields, resume_id, updated_at')
+        .maybeSingle();
+      if (error) return errorResult(error.message);
+      if (!data) return errorResult('No applicant_profile row yet — the user has not filled one in.');
+      return jsonResult(data);
+    }
+  );
+
+  server.registerTool(
+    'confirm_applicant_facts',
+    {
+      title: 'Save facts the user has confirmed',
+      description:
+        'Merge facts the user stated themselves into the applicant profile and mark them confirmed, for example ' +
+        'answers the user gave to application questions. Existing facts with other keys are kept. Only call this ' +
+        'with values the user provided; never with inferred or guessed values.',
+      inputSchema: {
+        facts: z.record(z.string().min(1), z.unknown()),
+      },
+    },
+    async ({ facts }) => {
+      const { data: current, error: readError } = await db
+        .from('applicant_profile')
+        .select('facts, confirmed_fields')
+        .maybeSingle();
+      if (readError) return errorResult(readError.message);
+      const confirmed = new Set([...(current?.confirmed_fields ?? []), ...Object.keys(facts)]);
+      const { data, error } = await db
+        .from('applicant_profile')
+        .upsert({ id: true, facts: { ...(current?.facts ?? {}), ...facts }, confirmed_fields: [...confirmed] })
+        .select('facts, confirmed_fields, updated_at')
+        .single();
+      if (error) return errorResult(error.message);
+      return jsonResult(data);
+    }
+  );
+
+  server.registerTool(
+    'update_search_preferences',
+    {
+      title: 'Update the job-search preferences',
+      description: 'Change where to search, which job boards to search directly, and how many days back to look.',
+      inputSchema: {
+        location_tiers: z.array(z.array(z.string().min(1)).min(1)).min(1).optional(),
+        posted_within_days: z.number().int().min(1).max(365).optional(),
+        country: z.string().min(1).optional(),
+        site_domains: z.array(z.string().min(1)).optional(),
+      },
+    },
+    async ({ location_tiers, posted_within_days, country, site_domains }) => {
+      if (
+        location_tiers === undefined &&
+        posted_within_days === undefined &&
+        country === undefined &&
+        site_domains === undefined
+      ) {
+        return errorResult('Provide at least one of location_tiers, posted_within_days, country or site_domains.');
+      }
+      const { data, error } = await db
+        .from('search_preferences')
+        .update({
+          ...(location_tiers !== undefined ? { location_tiers } : {}),
+          ...(posted_within_days !== undefined ? { posted_within_days } : {}),
+          ...(country !== undefined ? { country } : {}),
+          ...(site_domains !== undefined ? { site_domains } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', true)
+        .select('*')
+        .single();
+      if (error) return errorResult(error.message);
       return jsonResult(data);
     }
   );
