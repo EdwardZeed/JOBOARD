@@ -112,7 +112,9 @@ export function createMcpServer(db: JoboardClient): McpServer {
       },
     },
     async (input) => {
-      const { data, error } = await db.from('applications').insert(input).select('*').single();
+      // Same rule as the dashboard's createApplication: anything past wishlist has been applied to now.
+      const applied_at = input.status !== 'wishlist' ? new Date().toISOString() : null;
+      const { data, error } = await db.from('applications').insert({ ...input, applied_at }).select('*').single();
       if (error) return errorResult(error.message);
 
       await db.from('application_events').insert({
@@ -141,13 +143,15 @@ export function createMcpServer(db: JoboardClient): McpServer {
     async ({ id, status, note }) => {
       const { data: current, error: currentError } = await db
         .from('applications')
-        .select('status')
+        .select('status, applied_at')
         .eq('id', id)
         .single();
       if (currentError) return errorResult(currentError.message);
 
+      // Same rule as the dashboard's updateApplicationStatus: the first move past wishlist is the
+      // application date. (It used to be skipped whenever a note came along, which agents always send.)
       const patch: ApplicationUpdate = { status };
-      if (status === 'applied' && !note) patch.applied_at = new Date().toISOString();
+      if (status !== 'wishlist' && !current.applied_at) patch.applied_at = new Date().toISOString();
 
       const { data, error } = await db.from('applications').update(patch).eq('id', id).select('*').single();
       if (error) return errorResult(error.message);
